@@ -51,16 +51,6 @@ async function bridge(key: string) {
 
   const amountOutMin = quotedAmountOut - (quotedAmountOut * SLIPPAGE) / 100n;
 
-  const unsignedTx = await bridgeContract.swapAndBridge.populateTransaction(
-    amount,
-    amountOutMin,
-    154,
-    wallet.address,
-    wallet.address,
-    "0x0000000000000000000000000000000000000000",
-    "0x",
-  );
-
   const oft = await oftContract.estimateSendFee(
     154,
     wallet.address,
@@ -72,6 +62,24 @@ async function bridge(key: string) {
   const [nativeFee] = oft;
   const valueAndFee = amount + nativeFee * 3n;
 
+  const txArgs = [
+    amount,
+    amountOutMin,
+    154,
+    wallet.address,
+    wallet.address,
+    "0x0000000000000000000000000000000000000000",
+    "0x",
+  ];
+
+  const gasLimit = await bridgeContract.swapAndBridge.estimateGas(...txArgs, {
+    value: valueAndFee,
+  });
+
+  const unsignedTx = await bridgeContract.swapAndBridge.populateTransaction(...txArgs, {
+    value: valueAndFee,
+  });
+
   console.log(`Wallet address: ${wallet.address}`);
   console.log(`Swap ${formatEther(amount)} ETH for ${formatEther(amountOutMin)} GOERLIETH`);
   console.log(`Total (include bridge and swap fees): ${formatEther(valueAndFee)} ETH`);
@@ -81,10 +89,9 @@ async function bridge(key: string) {
   cli.spinner("Send transaction");
   const tx = await wallet.sendTransaction({
     ...unsignedTx,
-    value: valueAndFee,
     maxFeePerGas,
     maxPriorityFeePerGas,
-    gasLimit: 4_000_000n,
+    gasLimit,
   });
 
   await provider.waitForTransaction(tx.hash);
